@@ -10,6 +10,13 @@ export const GET = async (request: Request) =>{
         const {searchParams} = new URL(request.url);
         const userId = searchParams.get("userId");
         const categoryId = searchParams.get("categoryId");
+        const searchKeywords = searchParams.get("keywords") as string;
+        const startDate = searchParams.get("startDate");
+        const endDate = searchParams.get("endDate");
+        //default is 1 page, if no page is returned by client
+        const page: any = parseInt(searchParams.get("page") || "1");
+        const limit: any = parseInt(searchParams.get("limit" )|| "10");
+
 
         if (!userId || !Types.ObjectId.isValid(userId)){
             return new NextResponse(
@@ -48,9 +55,41 @@ export const GET = async (request: Request) =>{
             category: new Types.ObjectId(categoryId),
 
         }
-        //Add 
 
-        const blogs = await Blog.find(filter);
+        if(searchKeywords){
+            filter.$or = [
+                {
+                    //option i means case insensitive, return response found regardless of case match
+                    title: {$regex: searchKeywords, $options: "i"}
+
+                },
+                {
+                    description: {$regex: searchKeywords, $options: "i"}
+                },
+            ];
+        }
+
+        if(startDate && endDate){
+            filter.createdAt = {
+                //greater than or equal to
+                $gte: new Date(startDate),
+                //less than or equal to
+                $lte: new Date(endDate),
+            };
+        }
+        else if(startDate && !endDate){
+            filter.createdAt = {
+                $gte: new Date(startDate),
+            };
+        }
+        else if(endDate){
+            filter.createdAt = {$lte: new Date(endDate),
+            };
+        }
+        //skip is a built in function from mongoose, how many blogs skipped on a particular page
+        //e.g. on 2nd page - blog is visible from 1 to 10, on 3rd page, 11 - 20 blogs
+        const skip = (page - 1) * limit;
+        const blogs = await Blog.find(filter).sort({createdAt: "asc"}).skip(skip).limit(limit);
 
         return new NextResponse(JSON.stringify({ blogs }), {
             status: 200,
