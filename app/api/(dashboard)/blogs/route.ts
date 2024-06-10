@@ -1,18 +1,15 @@
-//takes dynamic input, which is why folder name has square brackets
 import connect from "@/lib/db";
 import User from "@/lib/modals/user";
 import Category from "@/lib/modals/category";
 import { NextResponse } from "next/server";
 import { Types } from "mongoose";
+import Blog from "@/lib/modals/blog";
 
-export const PATCH = async (request: Request, context: {params: any}) => {
-    const categoryId = context.params.category;
+export const GET = async (request: Request) =>{
     try{
-        const body = await request.json();
-        const {title} = body;
-
-        const { searchParams } = new URL(request.url);
+        const {searchParams} = new URL(request.url);
         const userId = searchParams.get("userId");
+        const categoryId = searchParams.get("categoryId");
 
         if (!userId || !Types.ObjectId.isValid(userId)){
             return new NextResponse(
@@ -29,8 +26,8 @@ export const PATCH = async (request: Request, context: {params: any}) => {
         }
 
         await connect();
-        const user = await User.findById(userId);
 
+        const user = await User.findById(userId);
         if(!user){
             return new NextResponse(
                 JSON.stringify({message: "User not found"}),
@@ -38,39 +35,43 @@ export const PATCH = async (request: Request, context: {params: any}) => {
             );
         }
 
-        const category = await Category.findOne({_id: categoryId, user: userId});
-
+        const category = await Category.findById(categoryId);
         if (!category){
             return new NextResponse(
                 JSON.stringify({message: "Category not found"}),
                 {status: 404}
             );
         }
-        
-        const updatedCategory = await Category.findByIdAndUpdate(
-            categoryId,
-            {title},
-            {new: true}
-        );
-        
-        return new NextResponse(
-            JSON.stringify({ message: "Category is updated", category: updatedCategory}),
-            {status: 200}
-        )
+
+        const filter: any = {
+            user: new Types.ObjectId(userId),
+            category: new Types.ObjectId(categoryId),
+
+        }
+        //Add 
+
+        const blogs = await Blog.find(filter);
+
+        return new NextResponse(JSON.stringify({ blogs }), {
+            status: 200,
+        });
     }
     catch (error: any){
-        return new NextResponse("Error in updating categories" + error.message, {
+        return new NextResponse("Error in fetching blogs" + error.message, {
             status: 500,
         });
     }
 }
 
-export const DELETE = async (request: Request, context: {params: any}) => {
-    const categoryId = context.params.category;
-
-    try{
-        const {searchParams} = new URL(request.url);
+export const POST = async (request: Request) => {
+    
+    try {
+        const { searchParams } = new URL(request.url);
         const userId = searchParams.get("userId");
+        const categoryId = searchParams.get("categoryId");
+
+        const body = await request.json();
+        const {title, description} = body;
 
         if (!userId || !Types.ObjectId.isValid(userId)){
             return new NextResponse(
@@ -85,11 +86,9 @@ export const DELETE = async (request: Request, context: {params: any}) => {
                 {status: 400}
             );
         }
-
         await connect();
 
         const user = await User.findById(userId);
-
         if(!user){
             return new NextResponse(
                 JSON.stringify({message: "User not found"}),
@@ -97,24 +96,31 @@ export const DELETE = async (request: Request, context: {params: any}) => {
             );
         }
 
-        const category = await Category.findOne({_id: categoryId, user: userId});
+        const category = await Category.findById(categoryId);
         if (!category){
             return new NextResponse(
-                JSON.stringify({message: "Category not found or does not belong to the user"}),
+                JSON.stringify({message: "Category not found"}),
                 {status: 404}
             );
         }
 
-        await Category.findByIdAndDelete(categoryId);
+        const newBlog = new Blog({
+            title, 
+            description,
+            user: new Types.ObjectId(userId),
+            category: new Types.ObjectId(categoryId),
+        });
 
+        await newBlog.save();
         return new NextResponse(
-            JSON.stringify({ message: "Category is deleted"}),
+            JSON.stringify({ message: "Blog is created", blog: newBlog}),
             {status: 200}
-        );
+        )
     }
     catch (error: any){
-        return new NextResponse("Error in deleting categories" + error.message, {
+        return new NextResponse("Error in fetching categories" + error.message, {
             status: 500,
         });
     }
 }
+
